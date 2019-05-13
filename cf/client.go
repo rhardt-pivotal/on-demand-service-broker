@@ -305,21 +305,30 @@ func (c Client) GetServiceOfferingGUID(brokerName string, logger *log.Logger) (s
 	return brokerGUID, nil
 }
 
+func (c Client) EnableServiceAccess(serviceOfferingID, planName string, logger *log.Logger) error {
+	plans, err := c.getPlansForServiceID(serviceOfferingID, logger)
+	if err != nil {
+		return err
+	}
+
+	planGUID := findPlanGUID(plans, planName)
+	if planGUID == "" {
+		return fmt.Errorf(`planID %q not found while enabling access`, planName)
+	}
+
+	return c.setAccessForPlan(planGUID, true, logger)
+}
+
 func (c Client) DisableServiceAccess(serviceOfferingID string, logger *log.Logger) error {
 	plans, err := c.getPlansForServiceID(serviceOfferingID, logger)
 	if err != nil {
 		return err
 	}
 
-	publicFalse := `{"public":false}`
 	for _, p := range plans {
-		resp, err := c.put(fmt.Sprintf("%s/v2/service_plans/%s", c.url, p.Metadata.GUID), publicFalse, logger)
+		err = c.setAccessForPlan(p.Metadata.GUID, false, logger)
 		if err != nil {
 			return err
-		}
-		if resp.StatusCode != http.StatusCreated {
-			body, _ := ioutil.ReadAll(resp.Body)
-			return fmt.Errorf("Unexpected reponse status %d, %q", resp.StatusCode, string(body))
 		}
 	}
 	return nil
@@ -382,6 +391,33 @@ func (c Client) UpdateServiceBroker(brokerGUID, name, username, password, url st
 
 func (c Client) ServiceBrokers() ([]ServiceBroker, error) {
 	return c.listServiceBrokers(c.logger)
+}
+
+func (c Client) setAccessForPlan(planGUID string, public bool, logger *log.Logger) error {
+	body := fmt.Sprintf(`{"public":%v}`, public)
+	resp, err := c.put(fmt.Sprintf("%s/v2/service_plans/%s", c.url, planGUID), body, logger)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return errors.Wrap(
+			fmt.Errorf("unexpected response status %d; response body %q", resp.StatusCode, string(body)),
+			fmt.Sprintf("failed to update service access for plan %s", planGUID),
+		)
+	}
+
+	return nil
+}
+
+func findPlanGUID(plans []ServicePlan, planName string) string {
+	planGUID := ""
+	for _, p := range plans {
+		if p.ServicePlanEntity.Name == planName {
+			planGUID = p.Metadata.GUID
+		}
+	}
+	return planGUID
 }
 
 func (c Client) listServiceBrokers(logger *log.Logger) ([]ServiceBroker, error) {

@@ -122,8 +122,8 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 
 			serviceInstancesHandler.RespondsWith(http.StatusOK, serviceInstances)
 			upgradeHandler.RespondsWith(http.StatusAccepted, operationData)
-			lastOperationHandler.RespondsOnCall(0, http.StatusOK, `{"state":"in progress"}`)
-			lastOperationHandler.RespondsOnCall(1, http.StatusOK, `{"state":"succeeded"}`)
+			lastOperationHandler.RespondsOnCallN(0, http.StatusOK, `{"state":"in progress"}`)
+			lastOperationHandler.RespondsOnCallN(1, http.StatusOK, `{"state":"succeeded"}`)
 		})
 
 		AfterEach(func() {
@@ -184,7 +184,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 		})
 
 		It("exits with a failure and shows a summary message when the upgrade fails", func() {
-			lastOperationHandler.RespondsOnCall(1, http.StatusOK, `{"state":"failed"}`)
+			lastOperationHandler.RespondsOnCallN(1, http.StatusOK, `{"state":"failed"}`)
 
 			runningTool := startUpgradeAllInstanceBinary(errandConfig)
 
@@ -212,8 +212,8 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 				serviceInstancesInitialResponse := fmt.Sprintf(`[{"plan_id": "service-plan-id", "service_instance_id": "%s"}]`, instanceID)
 				serviceInstancesResponseAfterPlanUpdate := fmt.Sprintf(`[{"plan_id": "service-plan-id-2", "service_instance_id": "%s"}]`, instanceID)
 
-				serviceInstancesHandler.RespondsOnCall(0, http.StatusOK, serviceInstancesInitialResponse)
-				serviceInstancesHandler.RespondsOnCall(1, http.StatusOK, serviceInstancesResponseAfterPlanUpdate)
+				serviceInstancesHandler.RespondsOnCallN(0, http.StatusOK, serviceInstancesInitialResponse)
+				serviceInstancesHandler.RespondsOnCallN(1, http.StatusOK, serviceInstancesResponseAfterPlanUpdate)
 
 				runningTool := startUpgradeAllInstanceBinary(errandConfig)
 
@@ -228,8 +228,8 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 
 		Context("when a service instance is deleted after upgrade-all starts but before the instance upgrade", func() {
 			It("Fetches the latest service instances info and reports a deleted service", func() {
-				serviceInstancesHandler.RespondsOnCall(0, http.StatusOK, serviceInstances)
-				serviceInstancesHandler.RespondsOnCall(1, http.StatusOK, "[]")
+				serviceInstancesHandler.RespondsOnCallN(0, http.StatusOK, serviceInstances)
+				serviceInstancesHandler.RespondsOnCallN(1, http.StatusOK, "[]")
 
 				runningTool := startUpgradeAllInstanceBinary(errandConfig)
 
@@ -242,8 +242,8 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 
 		Context("when a service instance refresh fails prior to instance upgrade", func() {
 			It("we log failure and carry on with previous data", func() {
-				serviceInstancesHandler.RespondsOnCall(0, http.StatusOK, serviceInstances)
-				serviceInstancesHandler.RespondsOnCall(1, http.StatusInternalServerError, "oops")
+				serviceInstancesHandler.RespondsOnCallN(0, http.StatusOK, serviceInstances)
+				serviceInstancesHandler.RespondsOnCallN(1, http.StatusInternalServerError, "oops")
 
 				runningTool := startUpgradeAllInstanceBinary(errandConfig)
 

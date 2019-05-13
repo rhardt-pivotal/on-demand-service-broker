@@ -36,12 +36,20 @@ func ListServicePlansForPage(serviceID string, page int) *servicePlansMock {
 }
 
 func DisablePlanAccess(planID string) *servicePlansMock {
+	return PutPlanAccess(planID, `{"public":false}`)
+}
+
+func EnablePlanAccess(planID string) *servicePlansMock {
+	return PutPlanAccess(planID, `{"public":true}`)
+}
+
+func PutPlanAccess(planID, body string) *servicePlansMock {
 	mock := &servicePlansMock{
 		mockhttp.NewMockedHttpRequest("PUT", fmt.Sprintf("/v2/service_plans/%s", planID)),
 	}
 
 	mock.WithContentType("application/x-www-form-urlencoded")
-	mock.WithBody(`{"public":false}`)
+	mock.WithBody(body)
 
 	return mock
 }

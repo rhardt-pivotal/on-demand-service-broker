@@ -17,7 +17,7 @@ import (
 
 var _ = Describe("broker registration errands", func() {
 
-	Describe("Register-broker errand", func() {
+	FDescribe("Register-broker errand", func() {
 		When("user is logged in as admin", func() {
 			It("can see the service and all plans in the marketplace regardless of cf_service_access", func() {
 				cfLogInAsAdmin()
@@ -84,6 +84,11 @@ var _ = Describe("broker registration errands", func() {
 			})
 
 			When("cf_service_access is set to manual for one of the plans", func() {
+				AfterEach(func() {
+					cfLogInAsAdmin()
+					Eventually(cf.Cf("disable-service-access", brokerInfo.ServiceOffering, "-p", "manual-plan")).Should(gexec.Exit(0))
+				})
+
 				It("has to be enabled manually", func() {
 					By("should not be visible in the marketplace")
 					marketplaceSession := cf.Cf("marketplace", "-s", brokerInfo.ServiceOffering)
@@ -104,7 +109,7 @@ var _ = Describe("broker registration errands", func() {
 
 					By("confirming the manual plan is still visible to space devs in the marketplace")
 					allButInactiveMarketplaceSession := cf.Cf("marketplace", "-s", brokerInfo.ServiceOffering)
-					Eventually(allButInactiveMarketplaceSession).Should(gbytes.Say("manual-plan"))
+					Eventually(allButInactiveMarketplaceSession).Should(gbytes.Say("manual-plan")) // TODO FIX
 				})
 			})
 
@@ -131,12 +136,12 @@ var _ = Describe("broker registration errands", func() {
 
 				It("should be restricted after previously being enabled", func() {
 					By("manually enabling service access to the plan to all", func() {
-						cfLogInAsAdmin()
+						cfLogInAsAdmin() //sys sys
 						Eventually(cf.Cf("enable-service-access", brokerInfo.ServiceOffering, "-p", "org-restricted-plan-2")).Should(gexec.Exit(0))
 					})
 
 					By("making sure that the space dev can see the about-to-be-limited plan", func() {
-						cfLogInAsSpaceDev()
+						cfLogInAsSpaceDev() // sys sys
 						marketplaceSession := cf.Cf("marketplace", "-s", brokerInfo.ServiceOffering)
 						Eventually(marketplaceSession).Should(gexec.Exit(0))
 						Expect(marketplaceSession).To(gbytes.Say("org-restricted-plan-2"))
@@ -147,7 +152,7 @@ var _ = Describe("broker registration errands", func() {
 					})
 
 					By("making sure that the space dev now cannot see that", func() {
-						cfLogInAsSpaceDev()
+						cfLogInAsSpaceDev() // sys sys
 						marketplaceSession := cf.Cf("marketplace", "-s", brokerInfo.ServiceOffering)
 						Eventually(marketplaceSession).Should(gexec.Exit(0))
 						Expect(marketplaceSession).ToNot(gbytes.Say("org-restricted-plan-2"))

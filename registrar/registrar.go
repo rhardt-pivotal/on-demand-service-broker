@@ -19,6 +19,7 @@ type RegisterBrokerCFClient interface {
 	ServiceBrokers() ([]cf.ServiceBroker, error)
 	CreateServiceBroker(name, username, password, url string) error
 	UpdateServiceBroker(guid, name, username, password, url string) error
+	EnableServiceAccess(serviceName, planName string, logger *log.Logger) error
 }
 
 const executionError = "failed to execute register-broker"
@@ -31,6 +32,15 @@ func (r *RegisterBrokerRunner) Run() error {
 
 	if err := r.createOrUpdateBroker(existingBrokers); err != nil {
 		return errors.Wrap(err, executionError)
+	}
+
+	for _, plan := range r.Config.ServicePlans.CFPlanAccesses {
+		if plan.AccessType == config.Enable {
+			err = r.CFClient.EnableServiceAccess(r.Config.ServicePlans.ServiceID, plan.Name, r.Logger)
+			if err != nil {
+				return errors.Wrap(err, executionError)
+			}
+		}
 	}
 
 	return nil
