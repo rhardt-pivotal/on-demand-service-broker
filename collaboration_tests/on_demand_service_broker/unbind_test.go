@@ -100,6 +100,39 @@ var _ = Describe("Unbind", func() {
 		Expect(loggerBuffer).To(gbytes.Say("service adapter will delete binding with ID"))
 	})
 
+	It("successfully unbind the service instance", func() {
+
+		secretsMap := map[string]string{"/foo/bar": "some super secret"}
+		fakeCredhubOperator.BulkGetReturns(secretsMap, nil)
+
+		dnsDetails := map[string]string{
+			"config-1": "some.names.bosh",
+		}
+		fakeBoshClient.GetDNSAddressesReturns(dnsDetails, nil)
+
+		By("retuning the correct status code")
+		resp, _ := doUnbindRequest(instanceID, bindingID, serviceID, dedicatedPlanID)
+		Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		Expect(fakeCredhubOperator.BulkGetCallCount()).To(Equal(1))
+
+		By("calling the adapter with the correct arguments")
+		args := getUnbindInputParams()
+		Expect(args.BindingId).To(Equal(bindingID))
+		Expect(args.BoshVms).To(Equal(string(toJson(boshVMs))))
+		Expect(args.Manifest).To(Equal(string(boshManifest)))
+		Expect(args.DNSAddresses).To(Equal(string(toJson(dnsDetails))))
+
+		Expect(args.RequestParameters).To(Equal(string(toJson(map[string]interface{}{
+			"plan_id":    dedicatedPlanID,
+			"service_id": serviceID,
+		}))))
+		Expect(args.Secrets).To(Equal(string(toJson(secretsMap))))
+
+		By("logging the unbind request")
+		Expect(loggerBuffer).To(gbytes.Say("service adapter will delete binding with ID"))
+	})
+
 	Describe("the failure scenarios", func() {
 		It("responds with 500 and a generic message", func() {
 			fakeCommandRunner.RunWithInputParamsReturns(nil, nil, nil, errors.New("oops"))

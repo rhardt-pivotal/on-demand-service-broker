@@ -8,6 +8,7 @@ package broker_test
 
 import (
 	"bytes"
+	"github.com/petergtz/pegomock"
 	"io"
 	"log"
 	"testing"
@@ -361,6 +362,7 @@ var _ = BeforeEach(func() {
 
 func TestBroker(t *testing.T) {
 	RegisterFailHandler(Fail)
+	pegomock.RegisterMockFailHandler(Fail)
 	RunSpecs(t, "Broker Suite")
 }
 

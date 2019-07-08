@@ -336,6 +336,18 @@
   version = "v1.1"
 
 [[projects]]
+  branch = "master"
+  digest = "1:c898625240aa7e360cc0fbcdb13843fc17ddcbf80ff0d3d69927ee005f105008"
+  name = "github.com/petergtz/pegomock"
+  packages = [
+    ".",
+    "ginkgo_compatible",
+    "internal/verify",
+  ]
+  pruneopts = "NUT"
+  revision = "3821b977214496511e7e49a911307c68f0785ef9"
+
+[[projects]]
   digest = "1:6284f28c5553900d1449effcb8ce052b7b20e0a47b17f99f6d01c39d37f6c520"
   name = "github.com/pivotal-cf/brokerapi"
   packages = [
@@ -529,6 +541,8 @@
     "github.com/onsi/gomega/ghttp",
     "github.com/onsi/gomega/types",
     "github.com/pborman/uuid",
+    "github.com/petergtz/pegomock",
+    "github.com/petergtz/pegomock/ginkgo_compatible",
     "github.com/pivotal-cf/brokerapi",
     "github.com/pivotal-cf/brokerapi/auth",
     "github.com/pivotal-cf/brokerapi/domain",

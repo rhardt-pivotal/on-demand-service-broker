@@ -10,6 +10,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	. "github.com/petergtz/pegomock/ginkgo_compatible"
+	. "github.com/pivotal-cf/on-demand-service-broker/broker/pegomock_fakes"
+	. "github.com/pivotal-cf/on-demand-service-broker/broker/pegomock_fakes/matchers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -57,27 +60,38 @@ var _ = Describe("Unbind", func() {
 		b = createDefaultBroker()
 	})
 
-	It("succeeds with a synchronous request", func() {
+	It("succeeds with a synchronous request with pegomock", func() {
+		fBoshClient := NewMockBoshClient()
+		fServiceAdapter := NewMockServiceAdapterClient()
+
+		plan, _ := serviceCatalog.Plans.FindByID(planID)
+
+		Whenever(fBoshClient.VMs(EqString(deploymentName), AnyPtrToLogLogger())).ThenReturn(boshVms, nil)
+		Whenever(fBoshClient.GetDeployment(EqString(deploymentName), AnyPtrToLogLogger())).ThenReturn(actualManifest, true, nil)
+		Whenever(fBoshClient.GetDNSAddresses(deploymentName, plan.BindingWithDNS)).ThenReturn(dnsDetails, nil)
+
+		var client broker.CloudFoundryClient = cfClient
+
+		b, err := broker.New(fBoshClient, client, serviceCatalog, brokerConfig, []broker.StartupChecker{}, fServiceAdapter, fakeDeployer, fakeSecretManager, fakeInstanceLister, fakeMapHasher, loggerFactory, fakeMaintenanceInfoChecker)
+		Expect(err).ToNot(HaveOccurred())
+		/** setup completed **/
+
 		unbindResponse, unbindErr := b.Unbind(context.Background(), instanceID, bindingID, domain.UnbindDetails{ServiceID: serviceID, PlanID: planID}, asyncAllowed)
 		Expect(unbindErr).NotTo(HaveOccurred())
+		Expect(unbindResponse.IsAsync).To(BeFalse())
 
-		Expect(boshClient.VMsCallCount()).To(Equal(1))
-		actualDeploymentName, _ := boshClient.VMsArgsForCall(0)
-		Expect(actualDeploymentName).To(Equal(deploymentName))
-
-		Expect(serviceAdapter.DeleteBindingCallCount()).To(Equal(1))
-		passedBindingID, passedVms, passedManifest, passedRequestParams, passedSecretsMap, dnsAddresses, _ := serviceAdapter.DeleteBindingArgsForCall(0)
-		Expect(passedBindingID).To(Equal(bindingID))
-		Expect(passedVms).To(Equal(boshVms))
-		Expect(passedManifest).To(Equal(actualManifest))
-		Expect(passedRequestParams).To(Equal(map[string]interface{}{"service_id": serviceID, "plan_id": planID}))
-		Expect(passedSecretsMap).To(Equal(secretsMap))
-		Expect(dnsAddresses).To(Equal(dnsDetails))
+		fBoshClient.VerifyWasCalledOnce().VMs(EqString(deploymentName), AnyPtrToLogLogger())
+		fServiceAdapter.VerifyWasCalledOnce().DeleteBinding(
+			EqString(bindingID),
+			EqBoshBoshVMs(boshVms),
+			EqSliceOfByte(actualManifest),
+			EqMapOfStringToInterface(map[string]interface{}{"service_id": serviceID, "plan_id": planID}),
+			EqMapOfStringToString(secretsMap),
+			EqMapOfStringToString(dnsDetails),
+			AnyPtrToLogLogger())
 
 		Expect(logBuffer.String()).To(MatchRegexp(
 			`\[[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]`))
-
-		Expect(unbindResponse.IsAsync).To(BeFalse())
 	})
 
 	It("acts synchronously even when async responses are allowed", func() {

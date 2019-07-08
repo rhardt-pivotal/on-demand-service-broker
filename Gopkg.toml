@@ -108,3 +108,7 @@
 [[constraint]]
   name = "code.cloudfoundry.org/credhub-cli"
   branch = "master"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/petergtz/pegomock"

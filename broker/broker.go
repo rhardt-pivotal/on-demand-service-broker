@@ -182,6 +182,7 @@ type Deployer interface {
 }
 
 //go:generate counterfeiter -o fakes/fake_service_adapter_client.go . ServiceAdapterClient
+//go:generate pegomock generate -o pegomock_fakes/pegomock_fake_service_adapter_client.go --generate-matchers --package pegomockfakes ServiceAdapterClient
 type ServiceAdapterClient interface {
 	CreateBinding(bindingID string, deploymentTopology bosh.BoshVMs, manifest []byte, requestParams map[string]interface{}, secretsMap, dnsAddresses map[string]string, logger *log.Logger) (serviceadapter.Binding, error)
 	DeleteBinding(bindingID string, deploymentTopology bosh.BoshVMs, manifest []byte, requestParams map[string]interface{}, secretsMap map[string]string, dnsAddresses map[string]string, logger *log.Logger) error
@@ -190,6 +191,7 @@ type ServiceAdapterClient interface {
 }
 
 //go:generate counterfeiter -o fakes/fake_bosh_client.go . BoshClient
+//go:generate pegomock generate -o pegomock_fakes/pegomock_fake_boshclient.go --generate-matchers --package pegomockfakes BoshClient
 type BoshClient interface {
 	GetTask(taskID int, logger *log.Logger) (boshdirector.BoshTask, error)
 	GetTasks(deploymentName string, logger *log.Logger) (boshdirector.BoshTasks, error)
