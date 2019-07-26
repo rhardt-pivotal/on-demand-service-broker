@@ -12,7 +12,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/pkg/errors"
 )
 
@@ -27,6 +29,14 @@ type Client struct {
 	httpJsonClient
 	url    string
 	logger *log.Logger
+}
+
+func (c Client) UpgradeServiceInstance(serviceInstanceGUID string, maintenanceInfo MaintenanceInfo, logger *log.Logger) (LastOperation, error) {
+	panic("implement me")
+}
+
+func (c Client) GetServiceInstance(serviceInstanceGUID string, logger *log.Logger) (interface{}, error) {
+	panic("implement me")
 }
 
 type Instance struct {
@@ -268,12 +278,28 @@ func (c Client) DeleteServiceInstance(instanceGUID string, logger *log.Logger) e
 }
 
 func (c Client) GetAPIVersion(logger *log.Logger) (string, error) {
-	var infoResponse infoResponse
+	var infoResponse InfoResponse
 	err := c.get(fmt.Sprintf("%s/v2/info", c.url), &infoResponse, logger)
 	if err != nil {
 		return "", err
 	}
 	return infoResponse.APIVersion, nil
+}
+
+func (c Client) GetOSBAPIVersion(logger *log.Logger) *semver.Version {
+	var infoResponse InfoResponse
+	err := c.get(fmt.Sprintf("%s/v2/info", c.url), &infoResponse, logger)
+	osbapiVersion := infoResponse.OSBAPIVersion
+	versionNumbers := strings.Split(osbapiVersion, ".")
+	if len(versionNumbers) == 2 { // TODO think more about this
+		osbapiVersion = osbapiVersion + ".0"
+	}
+
+	osbapiSemVer, err := semver.NewVersion(osbapiVersion)
+	if err != nil {
+		logger.Printf("error converting OSBAPI version %q to semver. %s", osbapiVersion, err)
+	}
+	return osbapiSemVer
 }
 
 func (c Client) GetServiceOfferingGUID(brokerName string, logger *log.Logger) (string, error) {
@@ -490,6 +516,15 @@ func (c Client) UpdateServiceBroker(brokerGUID, name, username, password, url st
 
 func (c Client) ServiceBrokers() ([]ServiceBroker, error) {
 	return c.listServiceBrokers(c.logger)
+}
+
+func (c Client) GetPlanByServiceInstanceGUID(serviceGUID string, logger *log.Logger) (ServicePlan, error) {
+	servicePlanResponse := ServicePlanResponse{}
+	err := c.get(fmt.Sprintf("%s%s", c.url, "/v2/service_plans?q=service_instance_guid:"+serviceGUID), &servicePlanResponse, logger)
+	if err != nil {
+		return ServicePlan{}, errors.Wrap(err, fmt.Sprintf("failed to retrieve plan for service %q", serviceGUID))
+	}
+	return servicePlanResponse.ServicePlans[0], nil
 }
 
 func (c Client) setAccessForPlan(planGUID string, public bool, logger *log.Logger) error {

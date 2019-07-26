@@ -6,8 +6,6 @@
 
 package cf
 
-import "time"
-
 const (
 	defaultPerPage = 100
 
@@ -51,14 +49,9 @@ type pagination struct {
 	NextPath     string `json:"next_url"`
 }
 
-type infoResponse struct {
-	APIVersion string `json:"api_version"`
-}
-
-type oauthTokenResponse struct {
-	AccessToken  string        `json:"access_token"`
-	RefreshToken string        `json:"refresh_token"`
-	ExpiresIn    time.Duration `json:"expires_in"`
+type InfoResponse struct {
+	APIVersion    string `json:"api_version"`
+	OSBAPIVersion string `json:"osbapi_version"`
 }
 
 type ServicePlanResponse struct {
@@ -72,9 +65,14 @@ type ServicePlan struct {
 }
 
 type ServicePlanEntity struct {
-	UniqueID            string `json:"unique_id"`
-	ServiceInstancesUrl string `json:"service_instances_url"`
-	Name                string `json:"name"`
+	UniqueID            string          `json:"unique_id"`
+	ServiceInstancesUrl string          `json:"service_instances_url"`
+	Name                string          `json:"name"`
+	MaintenanceInfo     MaintenanceInfo `json:"maintenance_info"`
+}
+
+type MaintenanceInfo struct {
+	Version string `json:"version"`
 }
 
 type serviceInstanceResource struct {

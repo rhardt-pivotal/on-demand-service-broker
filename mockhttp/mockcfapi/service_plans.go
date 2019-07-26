@@ -23,6 +23,10 @@ func GetServicePlan(servicePlanGUID string) *mockhttp.Handler {
 	return mockhttp.NewMockedHttpRequest("GET", "/v2/service_plans/"+servicePlanGUID)
 }
 
+func GetServicePlanByUniqueID(servicePlanUniqueID string) *mockhttp.Handler {
+	return mockhttp.NewMockedHttpRequest("GET", "/v2/service_plans?q=unique_id:"+servicePlanUniqueID)
+}
+
 func ListServicePlans(serviceID string) *servicePlansMock {
 	return &servicePlansMock{
 		mockhttp.NewMockedHttpRequest("GET", "/v2/services/"+serviceID+"/service_plans?results-per-page=100"),

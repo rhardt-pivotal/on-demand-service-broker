@@ -61,6 +61,24 @@ func (m *getServiceInstanceMock) RespondsWithFailed(operation Operation) *mockht
 	return m.RespondsOKWith(body)
 }
 
+type putServiceInstanceMock struct {
+	*mockhttp.Handler
+	instanceGUID string
+	planId       string
+}
+
+func PutServiceInstance(instanceGUID string) *putServiceInstanceMock {
+	return &putServiceInstanceMock{
+		Handler:      mockhttp.NewMockedHttpRequest("PUT", "/v2/service_instances/"+instanceGUID),
+		instanceGUID: instanceGUID,
+	}
+}
+
+func (m *putServiceInstanceMock) RespondsWithInProgress(operation Operation) *mockhttp.Handler {
+	body := fmt.Sprintf(instanceResponseBody, m.instanceGUID, operation, InProgress)
+	return m.RespondsOKWith(body)
+}
+
 func DeleteServiceInstance(instanceGUID string) *mockhttp.Handler {
 	path := fmt.Sprintf("/v2/service_instances/%s?accepts_incomplete=true", instanceGUID)
 	return mockhttp.NewMockedHttpRequest("DELETE", path)
@@ -98,20 +116,6 @@ func ListServiceInstancesForPage(servicePlanGUID string, page int) *listServiceI
 				"/v2/service_plans/%s/service_instances?order-direction=asc&page=%d&results-per-page=100",
 				servicePlanGUID,
 				page),
-		),
-	}
-}
-
-func ListServiceInstancesBySpaceForPage(servicePlanGUID, spaceGUID string, page int) *listServiceInstancesMock {
-	return &listServiceInstancesMock{
-		mockhttp.NewMockedHttpRequest(
-			"GET",
-			fmt.Sprintf(
-				"/v2/service_plans/%s/service_instances?order-direction=asc&page=%d&results-per-page=100&q=space_guid:%s",
-				servicePlanGUID,
-				page,
-				spaceGUID,
-			),
 		),
 	}
 }

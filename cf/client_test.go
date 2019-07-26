@@ -7,21 +7,25 @@
 package cf_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path"
+	"regexp"
 
-	"net/http"
-
+	"github.com/coreos/go-semver/semver"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/ghttp"
 	"github.com/pivotal-cf/on-demand-service-broker/cf"
 	"github.com/pivotal-cf/on-demand-service-broker/cf/fakes"
+	"github.com/pivotal-cf/on-demand-service-broker/integration_tests/helpers"
 	"github.com/pivotal-cf/on-demand-service-broker/mockhttp"
 	"github.com/pivotal-cf/on-demand-service-broker/mockhttp/mockcfapi"
 )
@@ -29,7 +33,7 @@ import (
 var _ = Describe("Client", func() {
 	var server *mockhttp.Server
 	var testLogger *log.Logger
-	var logBuffer *gbytes.Buffer
+	var logBuffer *bytes.Buffer
 	var authHeaderBuilder *fakes.FakeAuthHeaderBuilder
 
 	const (
@@ -44,7 +48,7 @@ var _ = Describe("Client", func() {
 			return nil
 		}
 		server = mockcfapi.New()
-		logBuffer = gbytes.NewBuffer()
+		logBuffer = new(bytes.Buffer)
 		testLogger = log.New(io.MultiWriter(logBuffer, GinkgoWriter), "my-app", log.LstdFlags)
 	})
 
@@ -1902,6 +1906,99 @@ var _ = Describe("Client", func() {
 
 			_, getVersionErr := client.GetAPIVersion(testLogger)
 			Expect(getVersionErr.Error()).To(ContainSubstring("nothing today, thank you"))
+		})
+	})
+
+	Describe("GetOSBAPIVersion", func() {
+		It("gets OSBAPI version", func() {
+			server.VerifyAndMock(
+				mockcfapi.GetInfo().RespondsOKWith(`{"osbapi_version": "1.2.3"}`),
+			)
+			client, err := cf.New(server.URL, authHeaderBuilder, nil, true, testLogger)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(client.GetOSBAPIVersion(testLogger)).To(Equal(semver.New("1.2.3")))
+		})
+
+		It("converts a non-semver OSBAPI version to semver", func() {
+			server.VerifyAndMock(
+				mockcfapi.GetInfo().RespondsOKWith(`{"osbapi_version": "1.2"}`),
+			)
+			client, err := cf.New(server.URL, authHeaderBuilder, nil, true, testLogger)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(client.GetOSBAPIVersion(testLogger)).To(Equal(semver.New("1.2.0")))
+		})
+
+		It("returns nil when OSBAPI version is only one number", func() {
+			server.VerifyAndMock(
+				mockcfapi.GetInfo().RespondsOKWith(`{"osbapi_version": "1"}`),
+			)
+			client, err := cf.New(server.URL, authHeaderBuilder, nil, true, testLogger)
+			Expect(err).NotTo(HaveOccurred())
+
+			result := client.GetOSBAPIVersion(testLogger)
+
+			Expect(logBuffer.String()).To(ContainSubstring(`error converting OSBAPI version "1" to semver.`))
+			Expect(result).To(BeNil())
+		})
+
+		It("returns nil when OSBAPI version is empty", func() {
+			server.VerifyAndMock(
+				mockcfapi.GetInfo().RespondsOKWith(`{"osbapi_version": ""}`),
+			)
+			client, err := cf.New(server.URL, authHeaderBuilder, nil, true, testLogger)
+			Expect(err).NotTo(HaveOccurred())
+
+			result := client.GetOSBAPIVersion(testLogger)
+
+			Expect(logBuffer.String()).To(ContainSubstring(`error converting OSBAPI version "" to semver.`))
+			Expect(result).To(BeNil())
+		})
+	})
+
+	FDescribe("GetPlanByServiceInstanceGUID", func() {
+		It("returns service plan", func() {
+			cfApi := ghttp.NewServer()
+			servicePlanHandler := new(helpers.FakeHandler)
+
+			expectedServiceGUID := "plan-unique-id"
+			cfApi.RouteToHandler(http.MethodGet, regexp.MustCompile(`/v2/service_plans`), ghttp.CombineHandlers(
+				ghttp.VerifyRequest(http.MethodGet, ContainSubstring("/v2/service_plans"), "q=service_instance_guid:"+expectedServiceGUID),
+				servicePlanHandler.Handle,
+			))
+			servicePlanResponse := `{ "resources":[{ "entity": { "maintenance_info": { "version": "0.31.0" }}}]}`
+			servicePlanHandler.RespondsWith(http.StatusOK, servicePlanResponse)
+
+			client, err := cf.New(cfApi.URL(), authHeaderBuilder, nil, true, testLogger)
+			Expect(err).NotTo(HaveOccurred())
+
+			actualPlan, err := client.GetPlanByServiceInstanceGUID(expectedServiceGUID, testLogger)
+
+			Expect(servicePlanHandler.RequestsReceived()).To(Equal(1), "should call service plan handler")
+			Expect(actualPlan.ServicePlanEntity.MaintenanceInfo).To(Equal(cf.MaintenanceInfo{Version: "0.31.0"}))
+			Expect(err).To(Not(HaveOccurred()))
+		})
+
+		It("returns error when CF endpoint errors", func() {
+			cfApi := ghttp.NewServer()
+			servicePlanHandler := new(helpers.FakeHandler)
+
+			expectedServiceGUID := "plan-unique-id"
+			cfApi.RouteToHandler(http.MethodGet, regexp.MustCompile(`/v2/service_plans`), ghttp.CombineHandlers(
+				ghttp.VerifyRequest(http.MethodGet, ContainSubstring("/v2/service_plans"), "q=service_instance_guid:"+expectedServiceGUID),
+				servicePlanHandler.Handle,
+			))
+			servicePlanHandler.RespondsWith(http.StatusBadRequest, `{}`)
+
+			client, err := cf.New(cfApi.URL(), authHeaderBuilder, nil, true, testLogger)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = client.GetPlanByServiceInstanceGUID(expectedServiceGUID, testLogger)
+
+			Expect(servicePlanHandler.RequestsReceived()).To(Equal(1), "should call service plan handler")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(ContainSubstring("failed to retrieve plan for service")))
 		})
 	})
 
