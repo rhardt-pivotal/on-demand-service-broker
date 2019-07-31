@@ -8,11 +8,14 @@ package cf
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/pkg/errors"
 )
 
@@ -268,12 +271,28 @@ func (c Client) DeleteServiceInstance(instanceGUID string, logger *log.Logger) e
 }
 
 func (c Client) GetAPIVersion(logger *log.Logger) (string, error) {
-	var infoResponse infoResponse
+	var infoResponse InfoResponse
 	err := c.get(fmt.Sprintf("%s/v2/info", c.url), &infoResponse, logger)
 	if err != nil {
 		return "", err
 	}
 	return infoResponse.APIVersion, nil
+}
+
+func (c Client) GetOSBAPIVersion(logger *log.Logger) *semver.Version {
+	var infoResponse InfoResponse
+	err := c.get(fmt.Sprintf("%s/v2/info", c.url), &infoResponse, logger)
+	osbapiVersion := infoResponse.OSBAPIVersion
+	versionNumbers := strings.Split(osbapiVersion, ".")
+	if len(versionNumbers) == 2 { // TODO think more about this
+		osbapiVersion = osbapiVersion + ".0"
+	}
+
+	osbapiSemVer, err := semver.NewVersion(osbapiVersion)
+	if err != nil {
+		logger.Printf("error converting OSBAPI version %q to semver. %s", osbapiVersion, err)
+	}
+	return osbapiSemVer
 }
 
 func (c Client) GetServiceOfferingGUID(brokerName string, logger *log.Logger) (string, error) {
@@ -490,6 +509,61 @@ func (c Client) UpdateServiceBroker(brokerGUID, name, username, password, url st
 
 func (c Client) ServiceBrokers() ([]ServiceBroker, error) {
 	return c.listServiceBrokers(c.logger)
+}
+
+func (c Client) GetPlanByServiceInstanceGUID(serviceGUID string, logger *log.Logger) (ServicePlan, error) {
+	servicePlanResponse := ServicePlanResponse{}
+	err := c.get(fmt.Sprintf("%s%s", c.url, "/v2/service_plans?q=service_instance_guid:"+serviceGUID), &servicePlanResponse, logger)
+	if err != nil {
+		return ServicePlan{}, errors.Wrap(err, fmt.Sprintf("failed to retrieve plan for service %q", serviceGUID))
+	}
+	return servicePlanResponse.ServicePlans[0], nil
+}
+
+func (c Client) UpgradeServiceInstance(serviceInstanceGUID string, maintenanceInfo MaintenanceInfo, logger *log.Logger) (LastOperation, error) {
+	path := fmt.Sprintf(`%s/v2/service_instances/%s?accepts_incomplete=true`, c.url, serviceInstanceGUID)
+
+	requestBody, err := serialiseMaintenanceInfo(maintenanceInfo)
+	if err != nil {
+		return LastOperation{}, errors.Wrap(err, "failed to serialize request body")
+	}
+
+	resp, err := c.put(path, requestBody, logger)
+	if err != nil {
+		return LastOperation{}, err
+	}
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusCreated {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return LastOperation{},
+			fmt.Errorf("unexpected response status %d when upgrading service instance %q; response body %q", resp.StatusCode, serviceInstanceGUID, string(body))
+	}
+
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	var parsedResponse serviceInstanceResource
+	err = json.Unmarshal(body, &parsedResponse)
+	if err != nil {
+		return LastOperation{}, errors.Wrap(err, "failed to de-serialise the response body")
+	}
+
+	return parsedResponse.Entity.LastOperation, nil
+}
+
+func (c Client) GetServiceInstance(serviceInstanceGUID string, logger *log.Logger) (interface{}, error) {
+	serviceInstanceResource, err := c.getServiceInstance(serviceInstanceGUID, logger)
+
+}
+
+func serialiseMaintenanceInfo(maintenanceInfo MaintenanceInfo) (string, error) {
+	var requestBody struct {
+		MaintenanceInfo MaintenanceInfo `json:"maintenance_info"`
+	}
+	requestBody.MaintenanceInfo = maintenanceInfo
+	serialisedRequestBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", err
+	}
+	return string(serialisedRequestBody), nil
 }
 
 func (c Client) setAccessForPlan(planGUID string, public bool, logger *log.Logger) error {
