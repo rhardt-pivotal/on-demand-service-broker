@@ -206,10 +206,14 @@ var _ = Describe("upgrade-all-service-instances errand, basic operation", func()
 						gbytes.Say("FINISHED PROCESSING Status: SUCCESS"),
 						gbytes.Say("Number of successful operations: 2"),
 						gbytes.Say("Number of skipped operations: 1"),
+						gbytes.Say("Upgrading all instances via BOSH"),
+						gbytes.Say("FINISHED PROCESSING Status: SUCCESS"),
+						gbytes.Say("Number of successful operations: 3"),
+						gbytes.Say("Number of skipped operations: 0"),
 					))
 				})
 
-				By("assuring that CF knows the service instance is updated", func() {
+				By("checking that CF knows the service instance is updated", func() {
 					for i, app := range appDetails {
 						identifier := fmt.Sprintf("instance %d", i)
 						session := cf_helpers.Cf("service", app.ServiceName)
@@ -221,10 +225,16 @@ var _ = Describe("upgrade-all-service-instances errand, basic operation", func()
 				By("running the upgrade-all errand again", func() {
 					session := bosh_helpers.RunErrand(brokerInfo.DeploymentName, "upgrade-all-service-instances")
 					Expect(session).To(SatisfyAll(
+						gbytes.Say("Upgrading all instances via CF"),
 						gbytes.Say("STARTING OPERATION"),
 						gbytes.Say("FINISHED PROCESSING Status: SUCCESS"),
 						gbytes.Say("Number of successful operations: 0"),
 						gbytes.Say("Number of skipped operations: %d", instancesToTest),
+						gbytes.Say("Upgrading all instances via BOSH"),
+						gbytes.Say("STARTING OPERATION"),
+						gbytes.Say("FINISHED PROCESSING Status: SUCCESS"),
+						gbytes.Say("Number of successful operations: %d", instancesToTest),
+						gbytes.Say("Number of skipped operations: 0"),
 					))
 				})
 			})

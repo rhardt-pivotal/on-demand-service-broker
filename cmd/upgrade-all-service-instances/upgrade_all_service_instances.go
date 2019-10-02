@@ -37,8 +37,7 @@ func main() {
 		logger.Fatalln(err.Error())
 	}
 
-	err = yaml.Unmarshal(configContents, &errandConfig)
-	if err != nil {
+	if err := yaml.Unmarshal(configContents, &errandConfig); err != nil {
 		logger.Fatalln(err.Error())
 	}
 
@@ -47,17 +46,22 @@ func main() {
 		logger.Fatalln(err.Error())
 	}
 
-	configurator.SetUpgradeTriggerer(
-		createCFClient(errandConfig, logger),
-		errandConfig.MaintenanceInfoPresent,
-		logger,
-	)
+	cfClient := createCFClient(errandConfig, logger)
 
-	upgradeTool := instanceiterator.New(configurator)
+	if instanceiterator.CanUpgradeUsingCF(cfClient, errandConfig.MaintenanceInfoPresent, logger) {
+		configurator.SetUpgradeTriggererToCF(cfClient, logger)
 
-	err = upgradeTool.Iterate()
-	if err != nil {
-		logger.Fatalln(err.Error())
+		if err := instanceiterator.New(configurator).Iterate(); err != nil {
+			logger.Fatalln(err.Error()) // TODO: test this?
+		}
+	}
+
+	if err := configurator.SetUpgradeTriggererToBOSH(); err != nil {
+		logger.Fatalln(err.Error()) // TODO: test this?
+	}
+
+	if err := instanceiterator.New(configurator).Iterate(); err != nil {
+		logger.Fatalln(err.Error()) // TODO: test this?
 	}
 }
 
