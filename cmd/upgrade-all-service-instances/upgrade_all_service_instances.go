@@ -52,7 +52,7 @@ func main() {
 		configurator.SetUpgradeTriggererToCF(cfClient, logger)
 
 		if err := instanceiterator.New(configurator).Iterate(); err != nil {
-			logger.Fatalln(err.Error()) // TODO: test this?
+			logger.Fatalln(err.Error())
 		}
 	}
 

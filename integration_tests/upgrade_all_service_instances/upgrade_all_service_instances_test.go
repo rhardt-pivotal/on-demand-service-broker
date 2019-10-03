@@ -311,7 +311,10 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 				)
 			})
 
-			It("skips an instance upgrade when it is already up to date", func() {
+			It("upgrades it", func() {
+				//TODO: Make sure to attach mgmtapi handlers
+				// See `handleBOSHServiceInstanceUpgrade`
+
 				runningTool := startUpgradeAllInstanceBinary(errandConfig)
 
 				Eventually(runningTool, 5*time.Second).Should(gexec.Exit(0))
@@ -325,6 +328,24 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 					gbytes.Say(`\[upgrade\-all\] FINISHED PROCESSING Status: SUCCESS`),
 					gbytes.Say("Number of successful operations: 1"),
 					gbytes.Say("Number of skipped operations: 0"),
+				))
+			})
+
+			It("doesn't do BOSH upgrades when CF upgrade fail", func() {
+				cfApi.RouteToHandler(http.MethodGet, regexp.MustCompile(`/v2/service_instances/.*`),
+					ghttp.CombineHandlers(
+						ghttp.RespondWith(http.StatusOK, `{"entity": {"last_operation": { "type": "update", "state": "failed" }}}`),
+					),
+				)
+
+				runningTool := startUpgradeAllInstanceBinary(errandConfig)
+
+				Eventually(runningTool, 5*time.Second).Should(gexec.Exit(1))
+				Expect(runningTool).To(SatisfyAll(
+					gbytes.Say("Upgrading all instances via CF"),
+					gbytes.Say(`\[upgrade\-all\] FINISHED PROCESSING Status: FAILED`),
+					gbytes.Say("Number of service instances that failed to process: 1"),
+					Not(gbytes.Say("Upgrading all instances via BOSH")),
 				))
 			})
 		})
