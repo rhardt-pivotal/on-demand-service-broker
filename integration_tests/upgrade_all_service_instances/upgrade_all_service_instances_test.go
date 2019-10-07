@@ -42,7 +42,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 
 		var broker *ghttp.Server
 
-		Describe("HTTP Broker", func() {
+		When("the broker is not configured with TLS", func() {
 			var (
 				serviceInstances string
 				instanceID       string
@@ -71,6 +71,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 
 				Eventually(runningTool, 5*time.Second).Should(gexec.Exit(0))
 				Expect(runningTool).To(SatisfyAll(
+					Not(gbytes.Say("Upgrading all instances via CF")),
 					gbytes.Say("Upgrading all instances via BOSH"),
 					gbytes.Say("Sleep interval until next attempt: 2s"),
 					gbytes.Say(`\[upgrade\-all\] FINISHED PROCESSING Status: SUCCESS`),
@@ -155,7 +156,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 				Expect(runningTool).To(gbytes.Say(fmt.Sprintf(`Number of service instances that failed to process: 1 \[%s\]`, instanceID)))
 			})
 
-			Context("when the attempt limit is reached", func() {
+			When("the attempt limit is reached", func() {
 				It("exits with an error reporting the instances that were not upgraded", func() {
 					upgradeHandler.RespondsWith(http.StatusConflict, "")
 
@@ -171,7 +172,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 				})
 			})
 
-			Context("when a service instance plan is updated after upgrade-all starts but before instance upgrade", func() {
+			When("a service instance plan is updated after upgrade-all starts but before instance upgrade", func() {
 				It("uses the new plan for the upgrade", func() {
 					serviceInstancesInitialResponse := fmt.Sprintf(`[{"plan_id": "service-plan-id", "service_instance_id": "%s"}]`, instanceID)
 					serviceInstancesResponseAfterPlanUpdate := fmt.Sprintf(`[{"plan_id": "service-plan-id-2", "service_instance_id": "%s"}]`, instanceID)
@@ -192,7 +193,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 				})
 			})
 
-			Context("when a service instance is deleted after upgrade-all starts but before the instance upgrade", func() {
+			When("a service instance is deleted after upgrade-all starts but before the instance upgrade", func() {
 				It("Fetches the latest service instances info and reports a deleted service", func() {
 					serviceInstancesHandler.RespondsOnCall(0, http.StatusOK, serviceInstances)
 					serviceInstancesHandler.RespondsOnCall(1, http.StatusOK, "[]")
@@ -208,8 +209,8 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 				})
 			})
 
-			Context("when a service instance refresh fails prior to instance upgrade", func() {
-				It("we log failure and carry on with previous data", func() {
+			When("a service instance refresh fails prior to instance upgrade", func() {
+				It("logs failure and carries on with previous data", func() {
 					serviceInstancesHandler.RespondsOnCall(0, http.StatusOK, serviceInstances)
 					serviceInstancesHandler.RespondsOnCall(1, http.StatusInternalServerError, "oops")
 
@@ -225,7 +226,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 			})
 		})
 
-		Describe("HTTPS Broker", func() {
+		When("the broker is configured with TLS", func() {
 			var (
 				pemCert      string
 				errandConfig config.InstanceIteratorConfig
@@ -311,7 +312,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 				)
 			})
 
-			It("upgrades it", func() {
+			It("upgrades via CF then BOSH", func() {
 				//TODO: Make sure to attach mgmtapi handlers
 				// See `handleBOSHServiceInstanceUpgrade`
 
@@ -331,7 +332,7 @@ var _ = Describe("running the tool to upgrade all service instances", func() {
 				))
 			})
 
-			It("doesn't do BOSH upgrades when CF upgrade fail", func() {
+			It("doesn't do BOSH upgrades when CF upgrade fails", func() {
 				cfApi.RouteToHandler(http.MethodGet, regexp.MustCompile(`/v2/service_instances/.*`),
 					ghttp.CombineHandlers(
 						ghttp.RespondWith(http.StatusOK, `{"entity": {"last_operation": { "type": "update", "state": "failed" }}}`),
