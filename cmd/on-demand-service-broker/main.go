@@ -8,7 +8,9 @@ package main
 
 import (
 	"crypto/x509"
-	"flag"
+	"fmt"
+	"github.com/pivotal-cf/on-demand-service-broker/cli"
+	"github.com/spf13/pflag"
 	"log"
 	"os"
 
@@ -28,9 +30,9 @@ import (
 )
 
 func main() {
-	loggerFactory := loggerfactory.New(os.Stdout, broker.ComponentName, loggerfactory.Flags)
+	loggerFactory := loggerfactory.New(os.Stderr, broker.ComponentName, loggerfactory.Flags)
 	logger := loggerFactory.New()
-	logger.Println("Starting broker")
+	// logger.Println("Starting broker")
 
 	config := configParser(logger)
 	boshClient := createBoshClient(logger, config)
@@ -38,14 +40,23 @@ func main() {
 	stopServer := make(chan os.Signal, 1)
 	cfClient := createCfClient(config, logger)
 
-	brokerinitiator.Initiate(config, boshClient, boshClient, cfClient, commandRunner, stopServer, loggerFactory)
+	odbToolkit := brokerinitiator.Initiate(config, boshClient, boshClient, cfClient, commandRunner, stopServer, loggerFactory)
+
+	root := cli.CreateRootCommand(&config, odbToolkit)
+	fmt.Println() // Print a blank line before output for readability
+
+	if err := root.Execute(); err != nil {
+		os.Exit(1)
+	}
+	fmt.Println()
+
 }
 
 func configParser(logger *log.Logger) config.Config {
-	configFilePath := flag.String("configFilePath", "", "path to config file")
-	flag.Parse()
+	configFilePath := pflag.String("configFilePath", "/var/vcap/jobs/broker/config/broker.yml", "path to config file")
+	pflag.Parse()
 	if *configFilePath == "" {
-		logger.Fatal("must supply -configFilePath")
+		logger.Fatal("must supply --configFilePath")
 	}
 	config, err := config.Parse(*configFilePath)
 	if err != nil {

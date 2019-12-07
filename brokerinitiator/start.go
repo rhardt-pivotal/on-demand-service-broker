@@ -3,10 +3,10 @@ package brokerinitiator
 import (
 	"fmt"
 	"github.com/pivotal-cf/on-demand-service-broker/broker/decider"
+	"github.com/pivotal-cf/on-demand-service-broker/telemetry"
 	"log"
 	"os"
 
-	"github.com/pivotal-cf/on-demand-service-broker/telemetry"
 
 	"github.com/pivotal-cf/on-demand-service-broker/hasher"
 	"github.com/pivotal-cf/on-demand-service-broker/service"
@@ -26,13 +26,27 @@ import (
 	"github.com/pivotal-cf/on-demand-service-broker/task"
 )
 
+type ODBToolkit struct {
+	ServiceAdapterClient			*serviceadapter.Client
+	ManifestGenerator				task.ManifestGenerator
+	OdbSecrets						manifestsecrets.ODBSecrets
+	BoshCredhubStore				*credhub.Store
+	//Deployer						broker.Deployer
+	ManifestSecretManager			broker.ManifestSecretManager
+	InstanceLister					service.InstanceLister
+	ServiceBroker					apiserver.CombinedBroker
+	ClusterLister					service.IClusterLister
+	BoshClient						task.BoshClient
+	LoggerFactory					*loggerfactory.LoggerFactory
+}
+
 func Initiate(conf config.Config,
 	brokerBoshClient broker.BoshClient,
 	taskBoshClient task.BoshClient,
 	cfClient broker.CloudFoundryClient,
 	commandRunner serviceadapter.CommandRunner,
 	stopServer chan os.Signal,
-	loggerFactory *loggerfactory.LoggerFactory) {
+	loggerFactory *loggerfactory.LoggerFactory) (*ODBToolkit) {
 
 	logger := loggerFactory.New()
 	var err error
@@ -59,14 +73,22 @@ func Initiate(conf config.Config,
 	manifestSecretManager := manifestsecrets.BuildManager(conf.Broker.EnableSecureManifests, new(manifestsecrets.CredHubPathMatcher), boshCredhubStore)
 
 	instanceLister, err := service.BuildInstanceLister(cfClient, conf.ServiceCatalog.ID, conf.ServiceInstancesAPI, logger)
+
 	if err != nil {
 		logger.Fatalf("error building instance lister: %s", err)
 	}
 
+	clusterLister, err := service.BuildClusterLister(conf.ServiceInstancesAPI, logger)
+
+	if err != nil {
+		logger.Fatalf("error building cluster lister: %s", err)
+	}
+
+
 	telemetryLogger := telemetry.Build(conf.Broker.EnableTelemetry, conf.ServiceCatalog, logger)
 
 	var onDemandBroker apiserver.CombinedBroker
-	onDemandBroker, err = broker.New(brokerBoshClient, cfClient, conf.ServiceCatalog, conf.Broker, startupChecks, serviceAdapter, deploymentManager, manifestSecretManager, instanceLister, &hasher.MapHasher{}, loggerFactory, telemetryLogger, decider.Decider{})
+	onDemandBroker, err = broker.New(brokerBoshClient, cfClient, conf.ServiceCatalog, conf.Broker, startupChecks, serviceAdapter, nil, manifestSecretManager, instanceLister, &hasher.MapHasher{}, loggerFactory, telemetryLogger, decider.Decider{})
 	if err != nil {
 		logger.Fatalf("error starting broker: %s", err)
 	}
@@ -75,21 +97,27 @@ func Initiate(conf config.Config,
 		onDemandBroker = wrapWithCredHubBroker(conf, logger, onDemandBroker, loggerFactory)
 	}
 
-	server := apiserver.New(
-		conf,
-		onDemandBroker,
-		broker.ComponentName,
-		loggerFactory,
-		logger,
-	)
-
-	displayBanner(conf)
-
-	telemetryLogger.LogInstances(instanceLister, "broker", "startup")
-
-	if err := apiserver.StartAndWait(conf, server, logger, stopServer); err != nil {
-		logger.Fatal(err)
+	return &ODBToolkit{
+		ServiceAdapterClient:  serviceAdapter,
+		ManifestGenerator:     manifestGenerator,
+		OdbSecrets:            odbSecrets,
+		BoshCredhubStore:      boshCredhubStore,
+		//Deployer:              deploymentManager,
+		ManifestSecretManager: manifestSecretManager,
+		InstanceLister:        instanceLister,
+		ClusterLister:		   clusterLister,
+		ServiceBroker:         onDemandBroker,
+		BoshClient:			   taskBoshClient,
+		LoggerFactory:		   loggerFactory,
 	}
+	//
+	//displayBanner(conf)
+
+	// telemetryLogger.LogInstances(instanceLister, "broker", "startup")
+
+	//if err := apiserver.StartAndWait(conf, server, logger, stopServer); err != nil {
+	//	logger.Fatal(err)
+	//}
 }
 
 func wrapWithCredHubBroker(conf config.Config, logger *log.Logger, onDemandBroker apiserver.CombinedBroker, loggerFactory *loggerfactory.LoggerFactory) apiserver.CombinedBroker {

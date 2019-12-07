@@ -184,6 +184,7 @@ type Deployer interface {
 	Update(deploymentName, planID string, requestParams map[string]interface{}, previousPlanID *string, boshContextID string, secretsMap map[string]string, logger *log.Logger) (int, []byte, error)
 	Upgrade(deploymentName string, plan config.Plan, boshContextID string, logger *log.Logger) (int, []byte, error)
 	Recreate(deploymentName, planID, boshContextID string, logger *log.Logger) (int, error)
+	DryRunUpdate(deploymentName, planID string, requestParams map[string]interface{}, previousPlanID *string, boshContextID string, secretsMap map[string]string, logger *log.Logger) ([]byte, []byte, error)
 }
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o fakes/fake_service_adapter_client.go . ServiceAdapterClient
